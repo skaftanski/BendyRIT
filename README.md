@@ -1,4 +1,4 @@
-# Redmine Information Transfer (RIT)
+# Redmine Issue Transfer (RIT)
 
 ## Redmine Setup
 
