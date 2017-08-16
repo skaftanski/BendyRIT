@@ -18,6 +18,8 @@ namespace :rit do
 
     #Script Start
     project_ids = Set.new(Project.all.map(&:identifier))
+    ldap_groups = Set.new([])
+    current_groups = Group.where(lastname: ldap_groups).inject({}) { |acc, cg| acc[cg.lastname] = cg; acc }
     current_users = User.all.inject({}) { |acc, cu| acc[cu.login] = cu; acc }
     current_emails = EmailAddress.all.inject({}) {|acc, ce| acc[ce.address] = ce; acc }
 
@@ -41,6 +43,15 @@ namespace :rit do
       acc[u.login] = new_user
       acc
     end
+
+    groups = Group.where.not(lastname: ldap_groups).inject(current_groups.dup) do |acc, g|
+      new_group = Group.new(g.attributes.dup.except(:id))
+      new_group.lastname = "#{g.lastname}-#{import_project}"
+      new_group.users = g.users.pluck(:login).map { |login| users[login] }
+
+      acc[new_group.lastname] = new_group
+      acc
+    end
     # Import Sets the are disjoint
     roles = Role.all.inject({}) do |acc, r|
       new_role = Role.new(r.attributes.dup.except(:id))
@@ -54,20 +65,29 @@ namespace :rit do
       new_project = Project.new(p.attributes.dup.except(:id, :status))
       new_project.status = p.status
       new_project.name = "#{p.name}-#{import_project}"
-      new_project.identifier = "#{p.identifier}-#{import_project.downcase}" unless project_ids.include?(p.identifier)
+      new_project.identifier = "#{p.identifier}-#{import_project.downcase}" if project_ids.include?(p.identifier)
 
       acc[p.id] = new_project
       acc
     end
-
     # Link up associations
-    members = Member.all.inject({}) do |acc, m|
+    members_users = Member.joins(:user).where(users: { type: ['User', 'AnonymousUser'] }).inject({}) do |acc, m|
       member_attributes = {project: projects[m.project_id], user: users[m.user.login], mail_notification: m.mail_notification}
       new_member = Member.new(member_attributes)
 
       acc[m.id] = new_member
       acc
     end
+
+    members_groups = Member.joins(:user).where.not(users: { type: ['User', 'AnonymousUser'] }).inject({}) do |acc, m|
+      member_attributes = {project: projects[m.project_id], principal: groups[m.principal.lastname], mail_notification: m.mail_notification}
+      new_member = Member.new(member_attributes)
+
+      acc[m.id] = new_member
+      acc
+    end
+
+    members = members_users.merge(members_groups)
 
     member_roles = MemberRole.all.inject({}) do |acc, mr|
       member_role_attributes = {member: members[mr.member_id], role: roles[mr.role_id]}
