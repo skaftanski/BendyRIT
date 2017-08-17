@@ -63,6 +63,8 @@ namespace :rit do
 
     projects = Project.all.inject({}) do |acc, p|
       new_project = Project.new(p.attributes.dup.except(:id, :status))
+      new_project.lft = nil
+      new_project.rgt = nil
       new_project.status = p.status
       new_project.name = "#{p.name}-#{import_project}"
       new_project.identifier = "#{p.identifier}-#{import_project.downcase}" if project_ids.include?(p.identifier)
@@ -71,6 +73,7 @@ namespace :rit do
       acc
     end
     # Link up associations
+    projects.values.select { |p| p.parent }.each { |p| p.parent = projects[p.parent_id] }
     members_users = Member.joins(:user).where(users: { type: ['User', 'AnonymousUser'] }).inject({}) do |acc, m|
       member_attributes = {project: projects[m.project_id], user: users[m.user.login], mail_notification: m.mail_notification}
       new_member = Member.new(member_attributes)
@@ -79,8 +82,9 @@ namespace :rit do
       acc
     end
 
-    members_groups = Member.joins(:user).where.not(users: { type: ['User', 'AnonymousUser'] }).inject({}) do |acc, m|
-      member_attributes = {project: projects[m.project_id], principal: groups[m.principal.lastname], mail_notification: m.mail_notification}
+    members_groups = Member.joins(:principal).where.not(users: { type: ['User', 'AnonymousUser'] }).inject({}) do |acc, m|
+      member_group = groups[m.principal.lastname] || groups[m.principal.lastname + '-' + import_project]
+      member_attributes = {project: projects[m.project_id], principal: member_group, mail_notification: m.mail_notification}
       new_member = Member.new(member_attributes)
 
       acc[m.id] = new_member
@@ -88,15 +92,17 @@ namespace :rit do
     end
 
     members = members_users.merge(members_groups)
+    members.values.group_by {|m| m.project }.each { |p, ms| p.memberships = ms }
 
     member_roles = MemberRole.all.inject({}) do |acc, mr|
-      member_role_attributes = {member: members[mr.member_id], role: roles[mr.role_id]}
+      member_role_attributes = {member: members[mr.member_id], role: roles[mr.role_id], inherited_from: mr.inherited_from}
       new_member_role = MemberRole.new(member_role_attributes)
 
       acc[mr.id] = new_member_role
       acc
     end
 
+    member_roles.values.select { |mr| mr.member}.group_by {|mr| mr.member }.each { |m, mrs| m.member_roles = mrs }
     # Set connection back to local database
     ActiveRecord::Base.establish_connection(**current_configuration["development"].symbolize_keys)
 
@@ -104,7 +110,7 @@ namespace :rit do
     EmailAddress.skip_callback(:create, :after, :deliver_security_notification_create)
     EmailAddress.skip_callback(:update, :after, :deliver_security_notification_update)
 
-    projects.values.each { |p| p.save! }
+    projects.values.each { |p| p.save! if p.new_record? }
   end
 end
 
