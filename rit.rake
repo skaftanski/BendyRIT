@@ -74,6 +74,8 @@ namespace :rit do
     end
     # Link up associations
     projects.values.select { |p| p.parent }.each { |p| p.parent = projects[p.parent_id] }
+    projects.values.each { |p| p.enabled_modules = p.enabled_modules.map { |em| EnabledModule.new(em.attributes.dup.except(:id)) } }
+
     members_users = Member.joins(:user).where(users: { type: ['User', 'AnonymousUser'] }).inject({}) do |acc, m|
       member_attributes = {project: projects[m.project_id], user: users[m.user.login], mail_notification: m.mail_notification}
       new_member = Member.new(member_attributes)
