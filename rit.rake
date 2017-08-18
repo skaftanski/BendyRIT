@@ -19,6 +19,7 @@ namespace :rit do
     ldap_groups = Set.new([])
     #Script Start
     project_ids = Set.new(Project.all.map(&:identifier))
+    builtin_roles = Role.where.not(builtin: 0).inject({}) { |acc, br| acc[br.id] = br; acc }
     current_groups = Group.where(lastname: ldap_groups).inject({}) { |acc, cg| acc[cg.lastname] = cg; acc }
     current_users = User.all.inject({}) { |acc, cu| acc[cu.login] = cu; acc }
     current_emails = EmailAddress.all.inject({}) {|acc, ce| acc[ce.address] = ce; acc }
@@ -53,7 +54,7 @@ namespace :rit do
       acc
     end
     # Import Sets the are disjoint
-    roles = Role.all.inject({}) do |acc, r|
+    roles = Role.where(builtin: 0).inject(builtin_roles.dup) do |acc, r|
       new_role = Role.new(r.attributes.dup.except(:id))
       new_role.name = "#{r.name}-#{import_project}"
 
@@ -67,6 +68,23 @@ namespace :rit do
 
       acc[t.id] = new_tracker
       acc
+    end
+
+    issue_statuses = IssueStatus.all.inject({}) do |acc, is|
+      new_issue_status = is.dup
+      new_issue_status.name = "#{is.name}-#{import_project}"
+
+      acc[is.id] = new_issue_status
+      acc
+    end
+
+    workflow_rules = WorkflowRule.all.map do |wfr|
+      new_workflow = wfr.dup
+      new_workflow.tracker = trackers[wfr.tracker_id]
+      new_workflow.role = roles[wfr.role_id]
+      new_workflow.old_status = issue_statuses[wfr.old_status_id] unless wfr.old_status_id == 0
+      new_workflow.new_status = issue_statuses[wfr.new_status_id] unless wfr.new_status_id == 0
+      new_workflow
     end
 
     projects = Project.all.inject({}) do |acc, p|
@@ -84,6 +102,11 @@ namespace :rit do
     # Link up associations
     projects.values.select { |p| p.parent }.each { |p| p.parent = projects[p.parent_id] }
     projects.values.each { |p| p.enabled_modules = p.enabled_modules.map { |em| EnabledModule.new(em.attributes.dup.except(:id)) } }
+
+    trackers.values.each { |t| t.default_status = issue_statuses[t.default_status_id] }
+    workflow_rules.group_by(&:tracker).each do |t, wfrs|
+      t.workflow_rules = wfrs
+    end
 
     members_users = Member.joins(:user).where(users: { type: ['User', 'AnonymousUser'] }).inject({}) do |acc, m|
       member_attributes = {project: projects[m.project_id], user: users[m.user.login], mail_notification: m.mail_notification}
