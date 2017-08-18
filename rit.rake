@@ -156,7 +156,7 @@ namespace :rit do
     members.values.group_by {|m| m.project }.each { |p, ms| p.memberships = ms }
 
     member_roles = MemberRole.all.inject({}) do |acc, mr|
-      member_role_attributes = {member: members[mr.member_id], role: roles[mr.role_id], inherited_from: mr.inherited_from}
+      member_role_attributes = {member: members[mr.member_id], role: roles[mr.role_id]}
       new_member_role = MemberRole.new(member_role_attributes)
 
       acc[mr.id] = new_member_role
