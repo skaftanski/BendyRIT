@@ -15,10 +15,10 @@ namespace :rit do
       username:  "redmine",
       password:  "my_password",
       database:  "sys_redmine_development"}
-
+    # Constants
+    ldap_groups = Set.new([])
     #Script Start
     project_ids = Set.new(Project.all.map(&:identifier))
-    ldap_groups = Set.new([])
     current_groups = Group.where(lastname: ldap_groups).inject({}) { |acc, cg| acc[cg.lastname] = cg; acc }
     current_users = User.all.inject({}) { |acc, cu| acc[cu.login] = cu; acc }
     current_emails = EmailAddress.all.inject({}) {|acc, ce| acc[ce.address] = ce; acc }
@@ -61,8 +61,17 @@ namespace :rit do
       acc
     end
 
+    trackers = Tracker.all.inject({}) do |acc, t|
+      new_tracker = Tracker.new(t.attributes.dup.except(:id))
+      new_tracker.name = "#{t.name}-#{import_project}"
+
+      acc[t.id] = new_tracker
+      acc
+    end
+
     projects = Project.all.inject({}) do |acc, p|
-      new_project = Project.new(p.attributes.dup.except(:id, :status))
+      project_trackers = p.trackers.pluck(:id).map { |id| trackers[id] }
+      new_project = Project.new(p.attributes.dup.except(:id, :status).merge({trackers: project_trackers}))
       new_project.lft = nil
       new_project.rgt = nil
       new_project.status = p.status
