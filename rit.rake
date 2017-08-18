@@ -87,6 +87,11 @@ namespace :rit do
     end
 
     workflow_rules = WorkflowRule.all.map(&:dup)
+    issue_categories = IssueCategory.all.map do |ic|
+      new_issue_category = ic.dup
+      new_issue_category.name = "#{ic.name}-#{import_project}"
+      new_issue_category
+    end
 
     projects = Project.all.inject({}) do |acc, p|
       project_trackers = p.trackers.pluck(:id).map { |id| trackers[id] }
@@ -115,6 +120,15 @@ namespace :rit do
 
     workflow_rules.group_by(&:tracker).each do |t, wfrs|
       t.workflow_rules = wfrs
+    end
+
+    issue_categories.each do |issue_category|
+      issue_category.project = projects[issue_category.project_id]
+      issue_category.assigned_to = users[issue_category.assigned_to.id] if issue_category.assigned_to
+    end
+
+    issue_categories.group_by(&:project).each do |p, ics|
+      p.issue_categories = ics
     end
 
     enumerations.values.select(&:parent_id).each { |e| e.parent = enumerations[e.parent_id]}
