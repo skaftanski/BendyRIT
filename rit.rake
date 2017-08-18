@@ -95,7 +95,8 @@ namespace :rit do
 
     projects = Project.all.inject({}) do |acc, p|
       project_trackers = p.trackers.pluck(:id).map { |id| trackers[id] }
-      new_project = Project.new(p.attributes.dup.except(:id, :status).merge({trackers: project_trackers}))
+      new_project = p.dup
+      new_project.trackers = project_trackers
       new_project.lft = nil
       new_project.rgt = nil
       new_project.status = p.status
