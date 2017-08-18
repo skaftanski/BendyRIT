@@ -78,14 +78,15 @@ namespace :rit do
       acc
     end
 
-    workflow_rules = WorkflowRule.all.map do |wfr|
-      new_workflow = wfr.dup
-      new_workflow.tracker = trackers[wfr.tracker_id]
-      new_workflow.role = roles[wfr.role_id]
-      new_workflow.old_status = issue_statuses[wfr.old_status_id] unless wfr.old_status_id == 0
-      new_workflow.new_status = issue_statuses[wfr.new_status_id] unless wfr.new_status_id == 0
-      new_workflow
+    enumerations = Enumeration.all.inject({}) do |acc, e|
+      new_enumeration = e.dup
+      new_enumeration.name = "#{e.name}-#{import_project}"
+
+      acc[e.id] = new_enumeration
+      acc
     end
+
+    workflow_rules = WorkflowRule.all.map(&:dup)
 
     projects = Project.all.inject({}) do |acc, p|
       project_trackers = p.trackers.pluck(:id).map { |id| trackers[id] }
@@ -104,9 +105,20 @@ namespace :rit do
     projects.values.each { |p| p.enabled_modules = p.enabled_modules.map { |em| EnabledModule.new(em.attributes.dup.except(:id)) } }
 
     trackers.values.each { |t| t.default_status = issue_statuses[t.default_status_id] }
+
+    workflow_rules.each do |workflow|
+      workflow.tracker = trackers[workflow.tracker_id]
+      workflow.role = roles[workflow.role_id]
+      workflow.old_status = issue_statuses[workflow.old_status_id] unless workflow.old_status_id == 0
+      workflow.new_status = issue_statuses[workflow.new_status_id] unless workflow.new_status_id == 0
+    end
+
     workflow_rules.group_by(&:tracker).each do |t, wfrs|
       t.workflow_rules = wfrs
     end
+
+    enumerations.values.select(&:parent_id).each { |e| e.parent = enumerations[e.parent_id]}
+    enumerations.values.select(&:project_id).each { |e| e.project = projects[e.project_id]}
 
     members_users = Member.joins(:user).where(users: { type: ['User', 'AnonymousUser'] }).inject({}) do |acc, m|
       member_attributes = {project: projects[m.project_id], user: users[m.user.login], mail_notification: m.mail_notification}
@@ -145,6 +157,8 @@ namespace :rit do
     EmailAddress.skip_callback(:update, :after, :deliver_security_notification_update)
 
     projects.values.each { |p| p.save! if p.new_record? }
+
+    enumerations.values.each { |e| e.save! }
   end
 end
 
