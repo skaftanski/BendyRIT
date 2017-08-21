@@ -222,12 +222,54 @@ namespace :rit do
     enumerations.values.each do |e|
       puts "Importing Enumeration #{e.name}"
       puts '-------------'
-      e.save!
+      e.save! if !args.dry_run
     end
   end
 
-  desc "Import Redmine Issue Data From Remote Instance"
+  desc "Import Redmine Issue Data From Remote Instance. Usage: rake rit:issue_import -- [options]"
   task issue_import: :environment do
+    # Command Line arguements
+    opts.banner = "Usage: rake rit:issue_import -- [options]"
+
+    opts.on('-s', '--suffix redmine_suffix', 'Suffix to be added to Redmine Projects being imported') do |rs|
+      args.redmine_suffix = rs.strip.upcase
+    end
+
+    opts.on('-i', '--issue-id issue_id_start', OptParse::DecimalInteger, 'Starting id for Remote Redmine issue imports') do |isi|
+      args.issue_id_start = isi
+      if args.issue_id_start <= 0
+        puts "Starting Issue Id must be greater then or equal to 0 (e.g. 1, 250, 10,000)"
+      end
+    end
+
+    opts.on('-h', '--help', 'Help') do
+      puts opts
+      exit
+    end
+
+    opts.parse!(opts.order!(ARGV) {})
+
+    if args.database_params.blank?
+      puts 'Remote Database Parameter File required'
+      puts opts
+      exit
+    elsif args.redmine_suffix.blank?
+      puts 'Redmine Suffix required'
+      puts opts
+      exit
+    elsif args.issue_id_start.blank?
+      puts 'Redmine Issue Id Start required'
+      puts opts
+      exit
+    end
+
+    current_configuration = ActiveRecord::Base.configurations[Rails.env].symbolize_keys
+
+    puts "-----DRY RUN-----" if args.dry_run
+    puts "Importing Data into #{current_configuration[:database]}"
+    # Set connection to remote database
+    ActiveRecord::Base.establish_connection(**args.database_params)
+    puts 'Loading Remote data'
   end
 end
 
