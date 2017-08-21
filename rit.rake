@@ -45,7 +45,6 @@ namespace :rit do
       exit
     end
 
-    puts 'Loading Remote data'
     # Constants
     ldap_groups = Set.new([])
     #Script Start
@@ -55,9 +54,12 @@ namespace :rit do
     current_users = User.all.inject({}) { |acc, cu| acc[cu.login] = cu; acc }
     current_emails = EmailAddress.all.inject({}) {|acc, ce| acc[ce.address] = ce; acc }
 
-    current_configuration = ActiveRecord::Base.configurations
+    current_configuration = ActiveRecord::Base.configurations[Rails.env].symbolize_keys
+
+    puts "Importing Data into #{current_configuration[:database]}"
     # Set connection to remote database
     ActiveRecord::Base.establish_connection(**args.database_params)
+    puts 'Loading Remote data'
     # Import Sets that can intersect
     emails = EmailAddress.all.reject { |e| current_emails[e.address] }.inject(current_emails.dup) do |acc, e|
       new_email_address = EmailAddress.new(e.attributes.dup.except(:id, :user))
@@ -196,7 +198,7 @@ namespace :rit do
 
     member_roles.values.select { |mr| mr.member}.group_by {|mr| mr.member }.each { |m, mrs| m.member_roles = mrs }
     # Set connection back to local database
-    ActiveRecord::Base.establish_connection(**current_configuration["development"].symbolize_keys)
+    ActiveRecord::Base.establish_connection(**current_configuration)
 
     # Remove email notification callbacks
     EmailAddress.skip_callback(:create, :after, :deliver_security_notification_create)
