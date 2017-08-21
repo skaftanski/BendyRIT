@@ -1,0 +1,5 @@
+adapter: mysql2
+host: localhost
+username: redmine
+password: my_password
+database: sys_redmine_development
