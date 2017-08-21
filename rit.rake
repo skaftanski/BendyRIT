@@ -45,6 +45,7 @@ namespace :rit do
       exit
     end
 
+    puts 'Loading Remote data'
     # Constants
     ldap_groups = Set.new([])
     #Script Start
@@ -201,7 +202,22 @@ namespace :rit do
     EmailAddress.skip_callback(:create, :after, :deliver_security_notification_create)
     EmailAddress.skip_callback(:update, :after, :deliver_security_notification_update)
 
-    projects.values.each { |p| p.save! if p.new_record? }
+    puts ''
+    puts "Importing Projects"
+    projects.values.each do |p|
+      puts "Importing Project #{p.name} (identifier: #{p.identifier})"
+      puts '-------------'
+      p.save! if p.new_record?
+    end
+
+    puts ''
+    puts "Importing Enumerations"
+    enumerations.values.each do |e|
+      puts "Importing Enumeration #{e.name}"
+      puts '-------------'
+      e.save!
+    end
+  end
 
   desc "Import Redmine Issue Data From Remote Instance"
   task issue_import: :environment do
