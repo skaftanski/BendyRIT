@@ -14,13 +14,34 @@ Redmine install steps
 **Business Administrators:**`mysql -u <username> -p <redmine database name> < sql/redmine_ba_refresh.sql`
 **System Administration:**`mysql -u <username> -p <redmine database name> < sql/redmine_sys_refresh.sql`
 
+### Terminology
+**Current Redmine** The redmine instance we are importing data into
+**Remote Redmine** The remine instance we are pulling data from
+
+## Running Scripts
+
+The import scripts are [Rake Tasks](http://guides.rubyonrails.org/command_line.html#custom-rake-tasks). The `rit.rake` file needs to be installed in the `lib/tasks` directory of the Redmine Server. Run `rake -T | grep rit` to see if you have installed in correctly.
+
+There are two importing passes `project_import` which imports projects and related tables and `issue_import` which imports issues. Both scripts need the Remote Redmine database parameters in a [YAML](http://yaml.org/) file with this structure
+```yaml
+adapter: mysql2
+host: <Hostname of Remote Redmine database server>
+username: <Remote Redmine database user>
+password: <Remote Redmine database Password>
+database: <Remote Redmine database name>
+```
+
+A sample database parameter file is included in the repository [here](./database_parameters_example.yml)
+
+To import projects run this command
+```bash
+rake rit:project_import -- -s<Remote Redmine Suffix> -r <Remote Redmine database parameters>
+```
+
 ## Merging Resolution
 
 This is the resolution for merging database tables from different projects that are not issues or directly linked to issues (e.g. TimeEntries).
 
-### Terminology
-**Current Redmine** The redmine instance we are importing data into
-**Remote Redmine** The remine instance we are pulling data from
 
 ### Table Unique Identifies
 
@@ -30,6 +51,10 @@ These are the fields uniquely identifying a record besides the primary numeric i
 * Group (the User table) - lastname
 * Project - identifier
 * Role - name
+* Tracker - name
+* IssueStatus - name
+* Enumeration - name
+* IssueCategory - name
 * Email - address
 
 ### Merging Strategy
@@ -44,7 +69,7 @@ For example if the Current Redmine has email addresses foo@bar.com, moo@bar.com 
 
 #### Suffix Addition
 
-Tables: Role
+Tables: Role, Tracker, IssueStatus, IssueCategory, Enumeration
 
 For all the records of the Remote Redmine we'll be adding a suffix (e.g. SYS) to the end of the records Unique identifier. All Remote Redmine records will be imported over and tagged as coming from that instance
 
