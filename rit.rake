@@ -6,8 +6,8 @@ require 'yaml'
 
 namespace :rit do
 
-  Options = Struct.new(:database_params, :redmine_suffix, :issue_id_start)
-  args = Options.new()
+  Options = Struct.new(:database_params, :redmine_suffix, :issue_id_start, :dry_run)
+  args = Options.new(dry_run: false)
 
   opts = OptionParser.new()
   opts.on('-r', '--remote-database-params remote_database_params', 'File for database Paramters') do |dp_file|
@@ -17,6 +17,10 @@ namespace :rit do
       puts "#{dp_file} does not exist"
       exit
     end
+  end
+
+  opts.on('-d', '--dry-run', 'Dry run of Project Import') do |dry|
+    args.dry_run = true
   end
 
   desc "Import Project data for issues From Remote Instance. Usage: rake rit project_import -- options"
@@ -56,6 +60,7 @@ namespace :rit do
 
     current_configuration = ActiveRecord::Base.configurations[Rails.env].symbolize_keys
 
+    puts "-----DRY RUN-----" if args.dry_run
     puts "Importing Data into #{current_configuration[:database]}"
     # Set connection to remote database
     ActiveRecord::Base.establish_connection(**args.database_params)
@@ -209,7 +214,7 @@ namespace :rit do
     projects.values.each do |p|
       puts "Importing Project #{p.name} (identifier: #{p.identifier})"
       puts '-------------'
-      p.save! if p.new_record?
+      p.save! if (p.new_record? && !args.dry_run)
     end
 
     puts ''
