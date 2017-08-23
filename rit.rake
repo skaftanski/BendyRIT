@@ -232,6 +232,14 @@ namespace :rit do
       puts '-------------'
       e.save! if !args.dry_run
     end
+
+    puts ''
+    puts "Importing Issue Statuses not associated with projects"
+    issue_statuses.values.reject { |is| is.id.nil? }.each do |is|
+      puts "Importing Issue Status #{is.name}"
+      puts '-------------'
+      is.save! if !args.dry_run
+    end
   end
 
   desc "Import Redmine Issue Data From Remote Instance. Usage: rake rit:issue_import -- [options]"
