@@ -184,8 +184,10 @@ namespace :rit do
     enumerations.values.select(&:project_id).each { |e| e.project = projects[e.project_id]}
 
     members_users = Member.joins(:user).where(users: { type: ['User', 'AnonymousUser'] }).inject({}) do |acc, m|
-      member_attributes = {project: projects[m.project_id], user: users[m.user.login], mail_notification: m.mail_notification}
-      new_member = Member.new(member_attributes)
+      new_member = m.dup
+      new_member.project = projects[m.project_id]
+      new_member.user = users[m.user.login]
+      new_member.principal = new_member.user
 
       acc[m.id] = new_member
       acc
@@ -193,8 +195,9 @@ namespace :rit do
 
     members_groups = Member.joins(:principal).where.not(users: { type: ['User', 'AnonymousUser'] }).inject({}) do |acc, m|
       member_group = groups[m.principal.lastname] || groups[m.principal.lastname + '-' + args.redmine_suffix]
-      member_attributes = {project: projects[m.project_id], principal: member_group, mail_notification: m.mail_notification}
-      new_member = Member.new(member_attributes)
+      new_member = m.dup
+      new_member.project = projects[m.project_id]
+      new_member.principal = member_group
 
       acc[m.id] = new_member
       acc
