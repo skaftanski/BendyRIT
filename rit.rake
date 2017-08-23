@@ -91,7 +91,7 @@ namespace :rit do
       acc[new_group.lastname] = new_group
       acc
     end
-    # Import Sets the are disjoint
+    # Import Sets that are disjoint
     roles = Role.where(builtin: 0).inject(builtin_roles.dup) do |acc, r|
       new_role = Role.new(r.attributes.dup.except(:id))
       new_role.name = "#{r.name}-#{args.redmine_suffix}"
@@ -125,10 +125,17 @@ namespace :rit do
     end
 
     workflow_rules = WorkflowRule.all.map(&:dup)
+
     issue_categories = IssueCategory.all.map do |ic|
       new_issue_category = ic.dup
       new_issue_category.name = "#{ic.name}-#{args.redmine_suffix}"
       new_issue_category
+    end
+
+    versions = Version.all.map do |v|
+      new_version = v.dup
+      new_version.name = "#{v.name}-#{args.redmine_suffix}"
+      new_version
     end
 
     projects = Project.all.inject({}) do |acc, p|
@@ -147,6 +154,7 @@ namespace :rit do
     # Link up associations
     projects.values.select { |p| p.parent }.each { |p| p.parent = projects[p.parent_id] }
     projects.values.each { |p| p.enabled_modules = p.enabled_modules.map { |em| EnabledModule.new(em.attributes.dup.except(:id)) } }
+    versions.each { |v| v.project = projects[v.project_id]}
 
     trackers.values.each { |t| t.default_status = issue_statuses[t.default_status_id] }
 
