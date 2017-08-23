@@ -170,7 +170,7 @@ namespace :rit do
 
     issue_categories.each do |issue_category|
       issue_category.project = projects[issue_category.project_id]
-      issue_category.assigned_to = users[issue_category.assigned_to.id] if issue_category.assigned_to
+      issue_category.assigned_to = users[issue_category.assigned_to.login] if issue_category.assigned_to
     end
 
     issue_categories.group_by(&:project).each do |p, ics|
@@ -237,10 +237,18 @@ namespace :rit do
 
     puts ''
     puts "Importing Issue Statuses not associated with projects"
-    issue_statuses.values.reject { |is| is.id.nil? }.each do |is|
+    issue_statuses.values.select { |is| is.id.nil? }.each do |is|
       puts "Importing Issue Status #{is.name}"
       puts '-------------'
       is.save! if !args.dry_run
+    end
+
+    puts ''
+    puts "Importing Users not associated with projects"
+    users.values.select { |u| u.id.nil? && !current_users[u.login] }.each do |u|
+      puts "Importing User Status #{u.name} (login: #{u.login})"
+      puts '-------------'
+      u.save! if !args.dry_run
     end
   end
 
