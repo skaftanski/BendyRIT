@@ -230,6 +230,7 @@ namespace :rit do
       p.save! if (p.new_record? && !args.dry_run)
     end
 
+    enumerations.values.select(&:project).each { |e| e.project_id = e.project.id }
     puts ''
     puts "Importing Enumerations"
     enumerations.values.each do |e|
