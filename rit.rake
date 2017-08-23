@@ -154,7 +154,6 @@ namespace :rit do
     # Link up associations
     projects.values.select { |p| p.parent }.each { |p| p.parent = projects[p.parent_id] }
     projects.values.each { |p| p.enabled_modules = p.enabled_modules.map { |em| EnabledModule.new(em.attributes.dup.except(:id)) } }
-    versions.each { |v| v.project = projects[v.project_id]}
 
     trackers.values.each { |t| t.default_status = issue_statuses[t.default_status_id] }
 
@@ -177,6 +176,9 @@ namespace :rit do
     issue_categories.group_by(&:project).each do |p, ics|
       p.issue_categories = ics
     end
+
+    versions.each { |v| v.project = projects[v.project_id] }
+    versions.group_by(&:project).each { |p, vs| p.versions = vs }
 
     enumerations.values.select(&:parent_id).each { |e| e.parent = enumerations[e.parent_id]}
     enumerations.values.select(&:project_id).each { |e| e.project = projects[e.project_id]}
