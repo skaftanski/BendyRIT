@@ -301,11 +301,10 @@ namespace :rit do
     current_users = User.all.inject({}) { |acc, cu| acc[cu.login] = cu; acc }
     current_trackers = Tracker.all.inject({}) { |acc, ct| acc[ct.name] = ct; acc }
     current_issue_statuses = IssueStatus.all.inject({}) { |acc, cis| acc[cis.name] = cis; acc }
-    current_issue_priorities = IssuePriority.all.inject({}) { |acc, cip| acc[cip.name] = cip; acc }
     current_versions = Version.all.inject({}) { |acc, cv| acc[cv.name] = cv; acc }
     current_projects = Project.all.inject({}) { |acc, cp| acc[cp.identifier] = cp; acc }
-    current_time_entry_activities = TimeEntryActivity.all.inject({}) { |acc, cip| acc[cip.name] = cip; acc }
 
+    current_enumerations = Enumeration.all.inject({}) { |acc, ce| acc[ce.name] = ce; acc  }
     current_configuration = ActiveRecord::Base.configurations[Rails.env].symbolize_keys
 
     puts "-----DRY RUN-----" if args.dry_run
@@ -314,12 +313,32 @@ namespace :rit do
     ActiveRecord::Base.establish_connection(**args.database_params)
     puts 'Loading Remote data'
 
+    # Maps from Remote ID to Local
+    project_id_map = Project.all.inject({nil: nil}) do |acc, p|
+      acc[p.id] = current_projects["#{p.identifier}-#{args.redmine_suffix.downcase}"] || current_projects[p.identifier]
+      acc
+    end
+
+    user_id_map = User.all.inject({nil: nil}) do |acc, u|
+      acc[u.id] = current_users[u.login] || current_groups[u.lastname]
+      acc
+    end
+
+    enumeration_id_map = Enumeration.all.inject({nil: nil}) do |acc, e|
+      acc[e.id] = current_enumerations["#{e.name}-#{args.redmine_suffix}"]
+      acc
+    end
+
+    issue_status_id_map = IssueStatus.all.inject({nil: nil}) do |acc, is|
+      acc[is.id] = current_issue_statuses["#{is.name}-#{args.redmine_suffix}"]
+      acc
+    end
     # Import Sets the are disjoint
     issue_id_map = Issue.pluck(:id).inject({}) { |acc, iid| acc[iid] = args.issue_id_start + iid; acc }
 
     time_entries = TimeEntry.all.map(&:dup)
 
-    issues = Issue.eager_load(:project, :tracker, :status, :author, :assigned_to).where.not(author_id: 158).inject({}) do |acc, i|
+    issues = Issue.eager_load(:project, :tracker, :status, :author, :assigned_to).all.inject({}) do |acc, i|
       new_issue = i.dup
       new_issue.id = issue_id_map[i.id]
       new_issue.root_id = issue_id_map[i.root_id]
@@ -338,21 +357,22 @@ namespace :rit do
       version =  current_versions["#{issue.fixed_version.name}-#{args.redmine_suffix}"] if issue.fixed_version
       tracker = current_trackers["#{issue.tracker.name}-#{args.redmine_suffix}"] if issue.tracker
 
-      issue.project =  current_projects["#{issue.project.identifier}-#{args.redmine_suffix.downcase}"] || current_projects[issue.project.identifier]
+      issue.project = project_id_map[issue.project_id]
 
       issue.fixed_version = version if version
       issue.tracker = tracker if tracker
 
-      issue.author = current_users[issue.author.login] if issue.author
-      issue.assigned_to = current_users[issue.assigned_to.login] || current_groups[issue.assigned_to.lastname] if issue.assigned_to
-      issue.status = current_issue_statuses["#{issue.status.name}-#{args.redmine_suffix}"] if issue.status
-      issue.priority = current_issue_priorities["#{issue.priority.name}-#{args.redmine_suffix}"] if issue.priority
+      issue.author = user_id_map[issue.author_id]
+      issue.assigned_to = user_id_map[issue.assigned_to_id]
+      issue.status = issue_status_id_map[issue.status_id]
+      issue.priority =  enumeration_id_map[issue.priority_id]
     end
 
     time_entries.each do |time_entry|
-      time_entry.project =  current_projects["#{time_entry.project.identifier}-#{args.redmine_suffix.downcase}"] || current_projects[time_entry.project.identifier]
-      time_entry.user = current_users[time_entry.user.login]
-      time_entry.activity = current_time_entry_activities["#{time_entry.activity.name}-#{args.redmine_suffix}"]
+      time_entry.project = project_id_map[time_entry.project_id]
+      time_entry.user = user_id_map[time_entry.user_id]
+
+      time_entry.activity =  enumeration_id_map[time_entry.activity_id]
     end
 
     time_entries.group_by(&:issue_id).each do |issue_id, entries|
