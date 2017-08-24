@@ -36,7 +36,18 @@ A sample database parameter file is included in the repository [here](./database
 To import projects run this command
 ```bash
 rake rit:project_import -- -s<Remote Redmine Suffix> -r <Remote Redmine database parameters>
+
+rake rit:project_import -- -sSYS -r remote_db_sys.yml
 ```
+
+To import issues run this command
+```bash
+rake rit:issue_import -- -s<Remote Redmine Suffix> -r <Remote Redmine database parameters> -i<Redmine Issue ID Start>
+
+rake rit:issue_import -- -sSYS -r remote_db_sys.yml -i10000
+```
+
+To do a dry run of the `project_import` or `issue_import` add the `-d` command parameter
 
 ## Merging Resolution
 
