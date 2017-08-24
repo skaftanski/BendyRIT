@@ -54,6 +54,7 @@ namespace :rit do
     #Script Start
     project_ids = Set.new(Project.all.map(&:identifier))
     builtin_roles = Role.where.not(builtin: 0).inject({}) { |acc, br| acc[br.id] = br; acc }
+
     current_groups = Group.where(lastname: ldap_groups).inject({}) { |acc, cg| acc[cg.lastname] = cg; acc }
     current_users = User.all.inject({}) { |acc, cu| acc[cu.login] = cu; acc }
     current_emails = EmailAddress.all.inject({}) {|acc, ce| acc[ce.address] = ce; acc }
@@ -142,6 +143,9 @@ namespace :rit do
       project_trackers = p.trackers.pluck(:id).map { |id| trackers[id] }
       new_project = p.dup
       new_project.trackers = project_trackers
+      new_project.enabled_modules = p.enabled_modules.map(&:dup)
+      new_project.enabled_modules.each { |em| em.project = new_project }
+
       new_project.lft = nil
       new_project.rgt = nil
       new_project.status = p.status
@@ -153,7 +157,6 @@ namespace :rit do
     end
     # Link up associations
     projects.values.select { |p| p.parent }.each { |p| p.parent = projects[p.parent_id] }
-    projects.values.each { |p| p.enabled_modules = p.enabled_modules.map { |em| EnabledModule.new(em.attributes.dup.except(:id)) } }
 
     trackers.values.each { |t| t.default_status = issue_statuses[t.default_status_id] }
 
