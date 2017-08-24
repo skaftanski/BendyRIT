@@ -313,7 +313,7 @@ namespace :rit do
     # Import Sets the are disjoint
     issue_id_map = Issue.pluck(:id).inject({}) { |acc, iid| acc[iid] = args.issue_id_start + iid; acc }
 
-    issues = Issue.eager_load(:project, :tracker, :status, :author, :assigned_to).where.not(author_id: 158).inject({}) do |acc, i|
+    issues = Issue.eager_load(:project, :tracker, :status, :author, :assigned_to).all.inject({}) do |acc, i|
       new_issue = i.dup
       new_issue.id = issue_id_map[i.id]
       new_issue.root_id = issue_id_map[i.root_id]
