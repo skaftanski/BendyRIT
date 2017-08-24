@@ -361,6 +361,8 @@ namespace :rit do
     # Set connection back to local database
     ActiveRecord::Base.establish_connection(**current_configuration)
 
+    puts ''
+    puts "Importing Issues"
     issues.values.map do |issue|
       issue.save! if !args.dry_run
     end
