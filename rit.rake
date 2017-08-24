@@ -293,6 +293,15 @@ namespace :rit do
       exit
     end
 
+    # Loading Current Issue relation tables
+    current_groups = Group.all.inject({}) { |acc, cg| acc[cg.lastname] = cg; acc }
+    current_users = User.all.inject({}) { |acc, cu| acc[cu.login] = cu; acc }
+    current_trackers = Tracker.all.inject({}) { |acc, ct| acc[ct.name] = ct; acc }
+    current_issue_statuses = IssueStatus.all.inject({}) { |acc, cis| acc[cis.name] = cis; acc }
+    current_issue_priorities = IssuePriority.all.inject({}) { |acc, cip| acc[cip.name] = cip; acc }
+    current_versions = Version.all.inject({}) { |acc, cv| acc[cv.name] = cv; acc }
+    current_projects = Project.all.inject({}) { |acc, cp| acc[cp.identifier] = cp; acc }
+
     current_configuration = ActiveRecord::Base.configurations[Rails.env].symbolize_keys
 
     puts "-----DRY RUN-----" if args.dry_run
@@ -300,6 +309,46 @@ namespace :rit do
     # Set connection to remote database
     ActiveRecord::Base.establish_connection(**args.database_params)
     puts 'Loading Remote data'
+
+    # Import Sets the are disjoint
+    issue_id_map = Issue.pluck(:id).inject({}) { |acc, iid| acc[iid] = args.issue_id_start + iid; acc }
+
+    issues = Issue.eager_load(:project, :tracker, :status, :author, :assigned_to).where.not(author_id: 158).inject({}) do |acc, i|
+      new_issue = i.dup
+      new_issue.id = issue_id_map[i.id]
+      new_issue.root_id = issue_id_map[i.root_id]
+      new_issue.parent_id = issue_id_map[i.parent_id]
+
+      new_issue.lft = nil
+      new_issue.rgt = nil
+
+      acc[new_issue.id] = new_issue
+      acc
+    end
+
+    # Set up relations
+    issues.values.each do |issue|
+      # Chnaging project overwrites fixed_version and tracker
+      version =  current_versions["#{issue.fixed_version.name}-#{args.redmine_suffix}"] if issue.fixed_version
+      tracker = current_trackers["#{issue.tracker.name}-#{args.redmine_suffix}"] if issue.tracker
+
+      issue.project =  current_projects["#{issue.project.identifier}-#{args.redmine_suffix.downcase}"] || current_projects[issue.project.identifier]
+
+      issue.fixed_version = version if version
+      issue.tracker = tracker if tracker
+
+      issue.author = current_users[issue.author.login] if issue.author
+      issue.assigned_to = current_users[issue.assigned_to.login] || current_groups[issue.assigned_to.lastname] if issue.assigned_to
+      issue.status = current_issue_statuses["#{issue.status.name}-#{args.redmine_suffix}"] if issue.status
+      issue.priority = current_issue_priorities["#{issue.priority.name}-#{args.redmine_suffix}"] if issue.priority
+    end
+
+    # Set connection back to local database
+    ActiveRecord::Base.establish_connection(**current_configuration)
+
+    issues.values.map do |issue|
+      issue.save! if !args.dry_run
+    end
   end
 end
 
