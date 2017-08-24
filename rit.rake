@@ -301,6 +301,7 @@ namespace :rit do
     current_issue_priorities = IssuePriority.all.inject({}) { |acc, cip| acc[cip.name] = cip; acc }
     current_versions = Version.all.inject({}) { |acc, cv| acc[cv.name] = cv; acc }
     current_projects = Project.all.inject({}) { |acc, cp| acc[cp.identifier] = cp; acc }
+    current_time_entry_activities = TimeEntryActivity.all.inject({}) { |acc, cip| acc[cip.name] = cip; acc }
 
     current_configuration = ActiveRecord::Base.configurations[Rails.env].symbolize_keys
 
@@ -313,7 +314,9 @@ namespace :rit do
     # Import Sets the are disjoint
     issue_id_map = Issue.pluck(:id).inject({}) { |acc, iid| acc[iid] = args.issue_id_start + iid; acc }
 
-    issues = Issue.eager_load(:project, :tracker, :status, :author, :assigned_to).all.inject({}) do |acc, i|
+    time_entries = TimeEntry.all.map(&:dup)
+
+    issues = Issue.eager_load(:project, :tracker, :status, :author, :assigned_to).where.not(author_id: 158).inject({}) do |acc, i|
       new_issue = i.dup
       new_issue.id = issue_id_map[i.id]
       new_issue.root_id = issue_id_map[i.root_id]
@@ -341,6 +344,18 @@ namespace :rit do
       issue.assigned_to = current_users[issue.assigned_to.login] || current_groups[issue.assigned_to.lastname] if issue.assigned_to
       issue.status = current_issue_statuses["#{issue.status.name}-#{args.redmine_suffix}"] if issue.status
       issue.priority = current_issue_priorities["#{issue.priority.name}-#{args.redmine_suffix}"] if issue.priority
+    end
+
+    time_entries.each do |time_entry|
+      time_entry.project =  current_projects["#{time_entry.project.identifier}-#{args.redmine_suffix.downcase}"] || current_projects[time_entry.project.identifier]
+      time_entry.user = current_users[time_entry.user.login]
+      time_entry.activity = current_time_entry_activities["#{time_entry.activity.name}-#{args.redmine_suffix}"]
+    end
+
+    time_entries.group_by(&:issue_id).each do |issue_id, entries|
+      issue = issues[issue_id_map[issue_id]]
+      entries.each { |e| e.issue = issue }
+      issue.time_entries = entries
     end
 
     # Set connection back to local database
