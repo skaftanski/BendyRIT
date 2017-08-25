@@ -360,6 +360,15 @@ namespace :rit do
     attachments = Attachment.all.map(&:dup)
     issue_relations = IssueRelation.all.map(&:dup)
 
+    journals = Journal.eager_load(:details).where.not(user_id: 158).map do |j|
+      new_journal = j.dup
+      new_journal.user = user_id_map[j.user_id]
+      new_journal.details = j.details.map(&:dup)
+      new_journal.details.each { |jd| jd.journal = new_journal }
+
+      new_journal
+    end
+
     # Set up relations
     issues.values.each do |issue|
       # Chnaging project overwrites fixed_version and tracker
@@ -407,6 +416,12 @@ namespace :rit do
       issue = issues[issue_id_map[issue_id]]
       to_issues.each { |ij| ij.issue_to = issue }
       issue.relations_to = to_issues
+    end
+
+    journals.group_by(&:journalized_id).each do |issue_id, issue_journals|
+      issue = issues[issue_id_map[issue_id]]
+      issue_journals.each { |ij| ij.issue = issue }
+      issue.journals = issue_journals
     end
 
     # Set connection back to local database
