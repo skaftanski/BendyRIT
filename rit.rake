@@ -375,14 +375,18 @@ namespace :rit do
       version =  version_id_map[issue.fixed_version_id]
       tracker = tracker_id_map[issue.tracker_id]
 
+      # Changing the tracker changes the status to nil
+      status = issue_status_id_map[issue.status_id]
+
       issue.project = project_id_map[issue.project_id]
 
       issue.fixed_version = version
       issue.tracker = tracker
 
+      issue.parent = issues[issue.parent_id]
       issue.author = user_id_map[issue.author_id]
       issue.assigned_to = user_id_map[issue.assigned_to_id]
-      issue.status = issue_status_id_map[issue.status_id]
+      issue.status = status
       issue.priority =  enumeration_id_map[issue.priority_id]
     end
 
@@ -426,6 +430,13 @@ namespace :rit do
 
     # Set connection back to local database
     ActiveRecord::Base.establish_connection(**current_configuration)
+
+    # Remove Unnecessary active record callbacks
+    Issue.skip_callback(:save, :before, :close_duplicates)
+
+    Issue.skip_callback(:save, :after, :update_parent_attributes)
+
+    Issue.skip_callback(:create, :after, :send_notification)
 
     puts ''
     puts "Importing Issues"
