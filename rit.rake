@@ -333,6 +333,16 @@ namespace :rit do
       acc[is.id] = current_issue_statuses["#{is.name}-#{args.redmine_suffix}"]
       acc
     end
+
+    version_id_map = Version.all.inject({nil: nil}) do |acc, v|
+      acc[v.id] = current_versions["#{v.name}-#{args.redmine_suffix}"]
+      acc
+    end
+
+    tracker_id_map = Tracker.all.inject({nil: nil}) do |acc, t|
+      acc[t.id] = current_trackers["#{t.name}-#{args.redmine_suffix}"]
+      acc
+    end
     # Import Sets the are disjoint
     issue_id_map = Issue.pluck(:id).inject({}) { |acc, iid| acc[iid] = args.issue_id_start + iid; acc }
 
@@ -354,13 +364,13 @@ namespace :rit do
     # Set up relations
     issues.values.each do |issue|
       # Chnaging project overwrites fixed_version and tracker
-      version =  current_versions["#{issue.fixed_version.name}-#{args.redmine_suffix}"] if issue.fixed_version
-      tracker = current_trackers["#{issue.tracker.name}-#{args.redmine_suffix}"] if issue.tracker
+      version =  version_id_map[issue.fixed_version_id]
+      tracker = tracker_id_map[issue.tracker_id]
 
       issue.project = project_id_map[issue.project_id]
 
-      issue.fixed_version = version if version
-      issue.tracker = tracker if tracker
+      issue.fixed_version = version
+      issue.tracker = tracker
 
       issue.author = user_id_map[issue.author_id]
       issue.assigned_to = user_id_map[issue.assigned_to_id]
