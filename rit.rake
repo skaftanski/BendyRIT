@@ -346,8 +346,6 @@ namespace :rit do
     # Import Sets the are disjoint
     issue_id_map = Issue.pluck(:id).inject({}) { |acc, iid| acc[iid] = args.issue_id_start + iid; acc }
 
-    time_entries = TimeEntry.all.map(&:dup)
-
     issues = Issue.eager_load(:project, :tracker, :status, :author, :assigned_to).all.inject({}) do |acc, i|
       new_issue = i.dup
       new_issue.id = issue_id_map[i.id]
@@ -360,6 +358,9 @@ namespace :rit do
       acc[new_issue.id] = new_issue
       acc
     end
+
+    time_entries = TimeEntry.all.map(&:dup)
+    attachments = Attachment.all.map(&:dup)
 
     # Set up relations
     issues.values.each do |issue|
@@ -389,6 +390,13 @@ namespace :rit do
       issue = issues[issue_id_map[issue_id]]
       entries.each { |e| e.issue = issue }
       issue.time_entries = entries
+    end
+
+    attachments.each { |a| a.author =  user_id_map[a.author_id] }
+    attachments.group_by(&:container_id).each do |issue_id, issue_attachments|
+      issue = issues[issue_id_map[issue_id]]
+      issue_attachments.each { |ij| ij.container = issue }
+      issue.attachments = issue_attachments
     end
 
     # Set connection back to local database
