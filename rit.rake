@@ -360,7 +360,7 @@ namespace :rit do
     attachments = Attachment.all.map(&:dup)
     issue_relations = IssueRelation.all.map(&:dup)
 
-    journals = Journal.eager_load(:details).where.not(user_id: 158).map do |j|
+    journals = Journal.eager_load(:details).all.map do |j|
       new_journal = j.dup
       new_journal.user = user_id_map[j.user_id]
       new_journal.details = j.details.map(&:dup)
