@@ -352,15 +352,13 @@ namespace :rit do
       new_issue.root_id = issue_id_map[i.root_id]
       new_issue.parent_id = issue_id_map[i.parent_id]
 
-      new_issue.lft = nil
-      new_issue.rgt = nil
-
       acc[new_issue.id] = new_issue
       acc
     end
 
     time_entries = TimeEntry.all.map(&:dup)
     attachments = Attachment.all.map(&:dup)
+    issue_relations = IssueRelation.all.map(&:dup)
 
     # Set up relations
     issues.values.each do |issue|
@@ -397,6 +395,18 @@ namespace :rit do
       issue = issues[issue_id_map[issue_id]]
       issue_attachments.each { |ij| ij.container = issue }
       issue.attachments = issue_attachments
+    end
+
+    issue_relations.group_by(&:issue_from_id).each do |issue_id, from_issues|
+      issue = issues[issue_id_map[issue_id]]
+      from_issues.each { |ij| ij.issue_from = issue }
+      issue.relations_from = from_issues
+    end
+
+    issue_relations.group_by(&:issue_to_id).each do |issue_id, to_issues|
+      issue = issues[issue_id_map[issue_id]]
+      to_issues.each { |ij| ij.issue_to = issue }
+      issue.relations_to = to_issues
     end
 
     # Set connection back to local database
