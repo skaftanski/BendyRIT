@@ -311,7 +311,7 @@ namespace :rit do
     puts "Importing Data into #{current_configuration[:database]}"
     # Set connection to remote database
     ActiveRecord::Base.establish_connection(**args.database_params)
-    puts 'Loading Remote data'
+    puts 'Loading Remote Issues and related data'
 
     # Maps from Remote ID to Local
     project_id_map = Project.all.inject({nil: nil}) do |acc, p|
@@ -368,8 +368,8 @@ namespace :rit do
 
       new_journal
     end
-
     # Set up relations
+    puts 'Setting up relations between issues and related data'
     issues.values.each do |issue|
       # Chnaging project overwrites fixed_version and tracker
       version =  version_id_map[issue.fixed_version_id]
