@@ -227,6 +227,16 @@ namespace :rit do
 
     puts ''
     puts "Importing Projects"
+    puts <<-PROJECTS
+Projects have
+  * #{trackers.length} Trackers
+  * #{workflow_rules.length} Workflow Rules
+  * #{issue_categories.length} Issue Categories
+  * #{roles.length} Roles
+  * #{users.values.reject(&:id).length} Users
+  * #{groups.length} Groups
+  * #{emails.values.reject(&:id).length} Emails
+PROJECTS
     projects.values.each do |p|
       puts "Importing Project #{p.name} (identifier: #{p.identifier})"
       puts '-------------'
@@ -441,6 +451,13 @@ namespace :rit do
     puts ''
     total_issues = issues.length
     puts "Importing #{total_issues} Issues"
+    puts <<-ISSUES
+Issues have
+  * #{journals.length} Journals
+  * #{JournalDetail.count} Journal Details
+  * #{attachments.length} Attachments
+  * #{0} Watchers
+ISSUES
     issue_block_num = [(total_issues / 100), 100].max
     issues_imported = 0
     issues.values.map do |issue|
