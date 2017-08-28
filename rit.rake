@@ -439,9 +439,16 @@ namespace :rit do
     Issue.skip_callback(:create, :after, :send_notification)
 
     puts ''
-    puts "Importing Issues"
+    total_issues = issues.length
+    puts "Importing #{total_issues} Issues"
+    issue_block_num = [(total_issues / 100), 100].max
+    issues_imported = 0
     issues.values.map do |issue|
       issue.save! if !args.dry_run
+      issues_imported = (issues_imported + 1)
+      if 0 == (issues_imported % issue_block_num)
+        puts "#{issues_imported} of #{total_issues} #{(issues_imported * 100) / total_issues}%"
+      end
     end
   end
 end
