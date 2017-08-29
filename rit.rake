@@ -398,6 +398,9 @@ PROJECTS
       issue.fixed_version = version
       issue.tracker = tracker
 
+      issue.lft = nil
+      issue.rgt = nil
+
       issue.parent = issues[issue.parent_id]
       issue.author = user_id_map[issue.author_id]
       issue.assigned_to = user_id_map[issue.assigned_to_id]
@@ -405,22 +408,8 @@ PROJECTS
       issue.priority =  enumeration_id_map[issue.priority_id]
     end
 
-    issue_relations.group_by(&:issue_from_id).each do |issue_id, from_issues|
-      issue = issues[issue_id_map[issue_id]]
-      from_issues.each { |ij| ij.issue_from = issue }
-      issue.relations_from = from_issues
-    end
-
-    issue_relations.group_by(&:issue_to_id).each do |issue_id, to_issues|
-      issue = issues[issue_id_map[issue_id]]
-      to_issues.each { |ij| ij.issue_to = issue }
-      issue.relations_to = to_issues
-    end
-
     # Remove Unnecessary active record callbacks
     Issue.skip_callback(:save, :before, :close_duplicates)
-
-    Issue.skip_callback(:save, :after, :update_parent_attributes)
 
     Issue.skip_callback(:create, :after, :send_notification)
 
@@ -430,10 +419,34 @@ PROJECTS
     issue_block_num = [(total_issues / 100), 100].max
     issues_imported = 0
     issues.values.map do |issue|
-      issue.save! if !args.dry_run
+      issue.save! if !args.dry_run && issue.new_record?
       issues_imported = (issues_imported + 1)
       if 0 == (issues_imported % issue_block_num)
         puts "#{issues_imported} of #{total_issues} #{(issues_imported * 100) / total_issues}%"
+      end
+    end
+
+    issue_relations.group_by(&:issue_from_id).each do |issue_id, from_issues|
+      issue = issues[issue_id_map[issue_id]]
+      from_issues.each { |ij| ij.issue_from = issue }
+    end
+
+    issue_relations.group_by(&:issue_to_id).each do |issue_id, to_issues|
+      issue = issues[issue_id_map[issue_id]]
+      to_issues.each { |ij| ij.issue_to = issue }
+    end
+
+    puts ''
+    total_issue_relations = issue_relations.length
+    puts "Importing #{total_issue_relations} issue_relations"
+    issue_relation_block_num = [(total_issue_relations / 100), 100].max
+    issue_relations_imported = 0
+    issue_relations.map do |issue_relation|
+      binding.pry unless issue_relation.valid?
+      issue_relation.save! if !args.dry_run
+      issue_relations_imported = (issue_relations_imported + 1)
+      if 0 == (issue_relations_imported % issue_relation_block_num)
+        puts "#{issue_relations_imported} of #{total_issue_relations} #{(issue_relations_imported * 100) / total_issue_relations}%"
       end
     end
 
