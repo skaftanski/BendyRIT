@@ -512,6 +512,9 @@ PROJECTS
       issue_journals.each { |ij| ij.issue = issue }
     end
 
+    Journal.skip_callback(:create, :before, :split_private_notes)
+    Journal.skip_callback(:create, :after, :send_notification)
+
     puts ''
     total_journals = journals.length
     puts "Importing #{total_journals} journals"
