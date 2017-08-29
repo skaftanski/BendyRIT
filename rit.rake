@@ -379,6 +379,10 @@ PROJECTS
 
       new_journal
     end
+
+    # Set connection back to local database
+    ActiveRecord::Base.establish_connection(**current_configuration)
+
     # Set up relations
     puts 'Setting up relations between issues and related data'
     issues.values.each do |issue|
@@ -401,26 +405,6 @@ PROJECTS
       issue.priority =  enumeration_id_map[issue.priority_id]
     end
 
-    time_entries.each do |time_entry|
-      time_entry.project = project_id_map[time_entry.project_id]
-      time_entry.user = user_id_map[time_entry.user_id]
-
-      time_entry.activity =  enumeration_id_map[time_entry.activity_id]
-    end
-
-    time_entries.group_by(&:issue_id).each do |issue_id, entries|
-      issue = issues[issue_id_map[issue_id]]
-      entries.each { |e| e.issue = issue }
-      issue.time_entries = entries
-    end
-
-    attachments.each { |a| a.author =  user_id_map[a.author_id] }
-    attachments.group_by(&:container_id).each do |issue_id, issue_attachments|
-      issue = issues[issue_id_map[issue_id]]
-      issue_attachments.each { |ij| ij.container = issue }
-      issue.attachments = issue_attachments
-    end
-
     issue_relations.group_by(&:issue_from_id).each do |issue_id, from_issues|
       issue = issues[issue_id_map[issue_id]]
       from_issues.each { |ij| ij.issue_from = issue }
@@ -433,23 +417,6 @@ PROJECTS
       issue.relations_to = to_issues
     end
 
-    watchers.each { |w| w.user = user_id_map[w.user_id] }
-    watchers.group_by(&:watchable_id).each do |issue_id, watched_issues|
-      issue = issues[issue_id_map[issue_id]]
-      next if issue.nil?
-      watched_issues.each { |wi| wi.watchable_id = issue.id }
-      issue.watchers = watched_issues
-    end
-
-    journals.group_by(&:journalized_id).each do |issue_id, issue_journals|
-      issue = issues[issue_id_map[issue_id]]
-      issue_journals.each { |ij| ij.issue = issue }
-      issue.journals = issue_journals
-    end
-
-    # Set connection back to local database
-    ActiveRecord::Base.establish_connection(**current_configuration)
-
     # Remove Unnecessary active record callbacks
     Issue.skip_callback(:save, :before, :close_duplicates)
 
@@ -460,13 +427,6 @@ PROJECTS
     puts ''
     total_issues = issues.length
     puts "Importing #{total_issues} Issues"
-    puts <<-ISSUES
-Issues have
-  * #{journals.length} Journals
-  * #{JournalDetail.count} Journal Details
-  * #{attachments.length} Attachments
-  * #{0} Watchers
-ISSUES
     issue_block_num = [(total_issues / 100), 100].max
     issues_imported = 0
     issues.values.map do |issue|
@@ -474,6 +434,81 @@ ISSUES
       issues_imported = (issues_imported + 1)
       if 0 == (issues_imported % issue_block_num)
         puts "#{issues_imported} of #{total_issues} #{(issues_imported * 100) / total_issues}%"
+      end
+    end
+
+    time_entries.each do |time_entry|
+      time_entry.project = project_id_map[time_entry.project_id]
+      time_entry.user = user_id_map[time_entry.user_id]
+
+      time_entry.activity =  enumeration_id_map[time_entry.activity_id]
+    end
+
+    time_entries.group_by(&:issue_id).each do |issue_id, entries|
+      issue = issues[issue_id_map[issue_id]]
+      entries.each { |e| e.issue = issue }
+    end
+
+    puts ''
+    total_time_entries = time_entries.length
+    puts "Importing #{total_time_entries} Time Entries"
+    time_entry_block_num = [(total_time_entries / 100), 100].max
+    time_entries_imported = 0
+    time_entries.map do |time_entry|
+      time_entry.save! if !args.dry_run
+      time_entries_imported = (time_entries_imported + 1)
+      if 0 == (time_entries_imported % time_entry_block_num)
+        puts "#{time_entries_imported} of #{total_time_entries} #{(time_entries_imported * 100) / total_time_entries}%"
+      end
+    end
+
+    attachments.each { |a| a.author =  user_id_map[a.author_id] }
+    attachments.group_by(&:container_id).each do |issue_id, issue_attachments|
+      issue = issues[issue_id_map[issue_id]]
+      issue_attachments.each { |ij| ij.container = issue }
+    end
+
+    puts ''
+    puts "Importing Attachmments"
+    attachments.map do |attachment|
+      attachment.save! if !args.dry_run
+    end
+
+    watchers.each { |w| w.user = user_id_map[w.user_id] }
+    watchers.group_by(&:watchable_id).each do |issue_id, watched_issues|
+      issue = issues[issue_id_map[issue_id]]
+      next if issue.nil?
+      watched_issues.each { |wi| wi.watchable_id = issue.id }
+    end
+
+    puts ''
+    total_watchers = watchers.length
+    puts "Importing #{total_watchers} watchers"
+    watcher_block_num = [(total_watchers / 100), 100].max
+    watchers_imported = 0
+    watchers.map do |watcher|
+      watcher.save! if !args.dry_run
+      watchers_imported = (watchers_imported + 1)
+      if 0 == (watchers_imported % watcher_block_num)
+        puts "#{watchers_imported} of #{total_watchers} #{(watchers_imported * 100) / total_watchers}%"
+      end
+    end
+
+    journals.group_by(&:journalized_id).each do |issue_id, issue_journals|
+      issue = issues[issue_id_map[issue_id]]
+      issue_journals.each { |ij| ij.issue = issue }
+    end
+
+    puts ''
+    total_journals = journals.length
+    puts "Importing #{total_journals} journals"
+    journal_block_num = [(total_journals / 100), 100].max
+    journals_imported = 0
+    journals.map do |journal|
+      journal.save! if !args.dry_run
+      journals_imported = (journals_imported + 1)
+      if 0 == (journals_imported % journal_block_num)
+        puts "#{journals_imported} of #{total_journals} #{(journals_imported * 100) / total_journals}%"
       end
     end
   end
