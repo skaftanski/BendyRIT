@@ -430,23 +430,29 @@ PROJECTS
     end
 
     # Remove Unnecessary active record callbacks
+    def logging_import(records, name, import_class, dry_run)
+      puts ''
+      total_records = records.length
+      puts "Importing #{total_records} #{name}"
+      record_block_num = [(total_records / 100), 100].max
+      records_imported = 0
+      import_class.transaction do
+        records.map do |record|
+          record.save! if !dry_run && record.new_record?
+          records_imported = (records_imported + 1)
+          if 0 == (records_imported % record_block_num)
+            puts "#{records_imported} of #{total_records} #{(records_imported * 100) / total_records}%"
+          end
+        end
+      end
+    end
+
     Issue.skip_callback(:save, :before, :close_duplicates)
     Issue.skip_callback(:save, :before, :force_updated_on_change)
 
     Issue.skip_callback(:create, :after, :send_notification)
 
-    puts ''
-    total_issues = issues.length
-    puts "Importing #{total_issues} Issues"
-    issue_block_num = [(total_issues / 100), 100].max
-    issues_imported = 0
-    issues.values.map do |issue|
-      issue.save! if !args.dry_run && issue.new_record?
-      issues_imported = (issues_imported + 1)
-      if 0 == (issues_imported % issue_block_num)
-        puts "#{issues_imported} of #{total_issues} #{(issues_imported * 100) / total_issues}%"
-      end
-    end
+    logging_import(issues.values, 'Issues', Issue, args.dry_run)
 
     issue_relations.group_by(&:issue_from_id).each do |issue_id, from_issues|
       issue = issues[issue_id_map[issue_id]]
@@ -458,19 +464,7 @@ PROJECTS
       to_issues.each { |ij| ij.issue_to = issue }
     end
 
-    puts ''
-    total_issue_relations = issue_relations.length
-    puts "Importing #{total_issue_relations} issue_relations"
-    issue_relation_block_num = [(total_issue_relations / 100), 100].max
-    issue_relations_imported = 0
-    issue_relations.map do |issue_relation|
-      binding.pry unless issue_relation.valid?
-      issue_relation.save! if !args.dry_run
-      issue_relations_imported = (issue_relations_imported + 1)
-      if 0 == (issue_relations_imported % issue_relation_block_num)
-        puts "#{issue_relations_imported} of #{total_issue_relations} #{(issue_relations_imported * 100) / total_issue_relations}%"
-      end
-    end
+    logging_import(issue_relations, 'Issue Relations', IssueRelation, args.dry_run)
 
     time_entries.each do |time_entry|
       time_entry.project = project_id_map[time_entry.project_id]
@@ -484,50 +478,25 @@ PROJECTS
       entries.each { |e| e.issue = issue }
     end
 
-    puts ''
-    total_time_entries = time_entries.length
-    puts "Importing #{total_time_entries} Time Entries"
-    time_entry_block_num = [(total_time_entries / 100), 100].max
-    time_entries_imported = 0
-    time_entries.map do |time_entry|
-      time_entry.save! if !args.dry_run
-      time_entries_imported = (time_entries_imported + 1)
-      if 0 == (time_entries_imported % time_entry_block_num)
-        puts "#{time_entries_imported} of #{total_time_entries} #{(time_entries_imported * 100) / total_time_entries}%"
-      end
-    end
+    logging_import(time_entries, 'Time Entries', TimeEntry, args.dry_run)
 
     attachments.each { |a| a.author =  user_id_map[a.author_id] }
+
     attachments.group_by(&:container_id).each do |issue_id, issue_attachments|
       issue = issues[issue_id_map[issue_id]]
       issue_attachments.each { |ij| ij.container = issue }
     end
 
-    puts ''
-    puts "Importing Attachmments"
-    attachments.map do |attachment|
-      # binding.pry unless attachment.valid?
-      attachment.save! if !args.dry_run
-    end
+    logging_import(attachments, 'Attachments', Attachment, args.dry_run)
 
     watchers.each { |w| w.user = user_id_map[w.user_id] }
     watchers.group_by(&:watchable_id).each do |issue_id, watched_issues|
       issue = issues[issue_id_map[issue_id]]
+      next if issue.nil?
       watched_issues.each { |wi| wi.watchable_id = issue.id }
     end
 
-    puts ''
-    total_watchers = watchers.length
-    puts "Importing #{total_watchers} watchers"
-    watcher_block_num = [(total_watchers / 100), 100].max
-    watchers_imported = 0
-    watchers.map do |watcher|
-      watcher.save! if !args.dry_run
-      watchers_imported = (watchers_imported + 1)
-      if 0 == (watchers_imported % watcher_block_num)
-        puts "#{watchers_imported} of #{total_watchers} #{(watchers_imported * 100) / total_watchers}%"
-      end
-    end
+    logging_import(watchers, 'Watchers', Watcher, args.dry_run)
 
     journals.group_by(&:journalized_id).each do |issue_id, issue_journals|
       issue = issues[issue_id_map[issue_id]]
@@ -537,18 +506,7 @@ PROJECTS
     Journal.skip_callback(:create, :before, :split_private_notes)
     Journal.skip_callback(:create, :after, :send_notification)
 
-    puts ''
-    total_journals = journals.length
-    puts "Importing #{total_journals} journals"
-    journal_block_num = [(total_journals / 100), 100].max
-    journals_imported = 0
-    journals.map do |journal|
-      journal.save! if !args.dry_run
-      journals_imported = (journals_imported + 1)
-      if 0 == (journals_imported % journal_block_num)
-        puts "#{journals_imported} of #{total_journals} #{(journals_imported * 100) / total_journals}%"
-      end
-    end
+    logging_import(journals, 'Journals', Journal, args.dry_run)
 
     ActiveRecord::Base.record_timestamps = true
   end
