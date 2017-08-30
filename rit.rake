@@ -68,14 +68,15 @@ namespace :rit do
     puts 'Loading Remote data'
     # Import Sets that can intersect
     emails = EmailAddress.all.reject { |e| current_emails[e.address] }.inject(current_emails.dup) do |acc, e|
-      new_email_address = EmailAddress.new(e.attributes.dup.except(:id, :user))
+      new_email_address = e.dup
+      new_email_address.user = nil
 
       acc[e.address] = new_email_address
       acc
     end
 
-    users = User.all.reject { |u| current_users[u.login] }.inject(current_users.dup) do |acc, u|
-      new_user = u.class.new(u.attributes.dup.except(:id))
+    users = User.eager_load(:email_address).all.reject { |u| current_users[u.login] }.inject(current_users.dup) do |acc, u|
+      new_user = u.dup
       new_user.login = u.login
       new_user.email_address = emails[u.email_address.address] if u.email_address
       new_user.email_addresses = u.email_addresses.map { |ea| emails[ea.address] }
@@ -94,7 +95,7 @@ namespace :rit do
     end
     # Import Sets that are disjoint
     roles = Role.where(builtin: 0).inject(builtin_roles.dup) do |acc, r|
-      new_role = Role.new(r.attributes.dup.except(:id))
+      new_role = r.dup
       new_role.name = "#{r.name}-#{args.redmine_suffix}"
 
       acc[r.id] = new_role
@@ -102,7 +103,7 @@ namespace :rit do
     end
 
     trackers = Tracker.all.inject({}) do |acc, t|
-      new_tracker = Tracker.new(t.attributes.dup.except(:id))
+      new_tracker = t.dup
       new_tracker.name = "#{t.name}-#{args.redmine_suffix}"
 
       acc[t.id] = new_tracker
@@ -139,6 +140,35 @@ namespace :rit do
       new_version
     end
 
+    members_users = Member.joins(:user).where(users: { type: ['User', 'AnonymousUser'] }).inject({}) do |acc, m|
+      new_member = m.dup
+      new_member.user = users[m.user.login]
+      new_member.principal = new_member.user
+
+      acc[m.id] = new_member
+      acc
+    end
+
+    members_groups = Member.joins(:principal).where.not(users: { type: ['User', 'AnonymousUser'] }).inject({}) do |acc, m|
+      member_group = groups[m.principal.lastname] || groups[m.principal.lastname + '-' + args.redmine_suffix]
+      new_member = m.dup
+      new_member.principal = member_group
+
+      acc[m.id] = new_member
+      acc
+    end
+
+    members = members_users.merge(members_groups)
+
+    member_roles = MemberRole.all.inject({}) do |acc, mr|
+      new_member_role = mr.dup
+      new_member_role.member = members[mr.member_id]
+      new_member_role.role = roles[mr.role_id]
+
+      acc[mr.id] = new_member_role
+      acc
+    end
+
     projects = Project.all.inject({}) do |acc, p|
       project_trackers = p.trackers.pluck(:id).map { |id| trackers[id] }
       new_project = p.dup
@@ -155,10 +185,54 @@ namespace :rit do
       acc[p.id] = new_project
       acc
     end
-    # Link up associations
-    projects.values.select { |p| p.parent }.each { |p| p.parent = projects[p.parent_id] }
+    # Set connection back to local database
+    ActiveRecord::Base.establish_connection(**current_configuration)
+
+    # Remove email notification callbacks
+    EmailAddress.skip_callback(:create, :after, :deliver_security_notification_create)
+    EmailAddress.skip_callback(:update, :after, :deliver_security_notification_update)
+
+    puts ''
+    puts "Importing Users"
+    users.values.select { |u| u.id.nil? && !current_users[u.login] }.each do |u|
+      puts "Importing User #{u.name} (login: #{u.login})"
+      puts '-------------'
+      u.save! if !args.dry_run
+    end
+
+    puts ''
+    puts "Importing Groups"
+    groups.values.reject(&:id).each do |g|
+      puts "Importing Group #{g.lastname}"
+      puts '-------------'
+      g.save! if !args.dry_run
+    end
+
+    puts ''
+    puts "Importing Roles"
+    roles.values.reject(&:id).each do |r|
+      puts "Importing Role #{r.name}"
+      puts '-------------'
+      r.save! if !args.dry_run
+    end
+
+    puts ''
+    puts "Importing Issue Statuses"
+    issue_statuses.values.each do |is|
+      puts "Importing  #{is.name}"
+      puts '-------------'
+      is.save! if !args.dry_run
+    end
 
     trackers.values.each { |t| t.default_status = issue_statuses[t.default_status_id] }
+
+    puts ''
+    puts "Importing Trackers"
+    trackers.values.each do |t|
+      puts "Importing Tracker #{t.name}"
+      puts '-------------'
+      t.save! if !args.dry_run
+    end
 
     workflow_rules.each do |workflow|
       workflow.tracker = trackers[workflow.tracker_id]
@@ -167,9 +241,26 @@ namespace :rit do
       workflow.new_status = issue_statuses[workflow.new_status_id] unless workflow.new_status_id == 0
     end
 
-    workflow_rules.group_by(&:tracker).each do |t, wfrs|
-      t.workflow_rules = wfrs
+    def logging_import(records, name, import_class, dry_run)
+      puts ''
+      total_records = records.length
+      puts "Importing #{total_records} #{name}"
+      record_block_num = [(total_records / 100), 100].max
+      records_imported = 0
+      import_class.transaction do
+        records.map do |record|
+          record.save! if !dry_run && record.new_record?
+          records_imported = (records_imported + 1)
+          if 0 == (records_imported % record_block_num)
+            puts "#{records_imported} of #{total_records} #{(records_imported * 100) / total_records}%"
+          end
+        end
+      end
     end
+
+    logging_import(workflow_rules, 'Workflow Rules', WorkflowRule, args.dry_run)
+
+    projects.values.select { |p| p.parent }.each { |p| p.parent = projects[p.parent_id] }
 
     issue_categories.each do |issue_category|
       issue_category.project = projects[issue_category.project_id]
@@ -183,59 +274,12 @@ namespace :rit do
     versions.each { |v| v.project = projects[v.project_id] }
     versions.group_by(&:project).each { |p, vs| p.versions = vs }
 
-    enumerations.values.select(&:parent_id).each { |e| e.parent = enumerations[e.parent_id]}
-    enumerations.values.select(&:project_id).each { |e| e.project = projects[e.project_id]}
-
-    members_users = Member.joins(:user).where(users: { type: ['User', 'AnonymousUser'] }).inject({}) do |acc, m|
-      new_member = m.dup
-      new_member.project = projects[m.project_id]
-      new_member.user = users[m.user.login]
-      new_member.principal = new_member.user
-
-      acc[m.id] = new_member
-      acc
-    end
-
-    members_groups = Member.joins(:principal).where.not(users: { type: ['User', 'AnonymousUser'] }).inject({}) do |acc, m|
-      member_group = groups[m.principal.lastname] || groups[m.principal.lastname + '-' + args.redmine_suffix]
-      new_member = m.dup
-      new_member.project = projects[m.project_id]
-      new_member.principal = member_group
-
-      acc[m.id] = new_member
-      acc
-    end
-
-    members = members_users.merge(members_groups)
-    members.values.group_by {|m| m.project }.each { |p, ms| p.memberships = ms }
-
-    member_roles = MemberRole.all.inject({}) do |acc, mr|
-      member_role_attributes = {member: members[mr.member_id], role: roles[mr.role_id]}
-      new_member_role = MemberRole.new(member_role_attributes)
-
-      acc[mr.id] = new_member_role
-      acc
-    end
-
-    member_roles.values.select { |mr| mr.member}.group_by {|mr| mr.member }.each { |m, mrs| m.member_roles = mrs }
-    # Set connection back to local database
-    ActiveRecord::Base.establish_connection(**current_configuration)
-
-    # Remove email notification callbacks
-    EmailAddress.skip_callback(:create, :after, :deliver_security_notification_create)
-    EmailAddress.skip_callback(:update, :after, :deliver_security_notification_update)
-
     puts ''
     puts "Importing Projects"
     puts <<-PROJECTS
 Projects have
-  * #{trackers.length} Trackers
-  * #{workflow_rules.length} Workflow Rules
   * #{issue_categories.length} Issue Categories
-  * #{roles.length} Roles
-  * #{users.values.reject(&:id).length} Users
-  * #{groups.length} Groups
-  * #{emails.values.reject(&:id).length} Emails
+  * #{versions.length} Versions
 PROJECTS
     projects.values.each do |p|
       puts "Importing Project #{p.name} (identifier: #{p.identifier})"
@@ -243,7 +287,9 @@ PROJECTS
       p.save! if (p.new_record? && !args.dry_run)
     end
 
-    enumerations.values.select(&:project).each { |e| e.project_id = e.project.id }
+    enumerations.values.select(&:parent_id).each { |e| e.parent = enumerations[e.parent_id]}
+    enumerations.values.select(&:project_id).each { |e| e.project = projects[e.project_id]}
+
     puts ''
     puts "Importing Enumerations"
     enumerations.values.each do |e|
@@ -252,21 +298,14 @@ PROJECTS
       e.save! if !args.dry_run
     end
 
-    puts ''
-    puts "Importing Issue Statuses not associated with projects"
-    issue_statuses.values.select { |is| is.id.nil? }.each do |is|
-      puts "Importing Issue Status #{is.name}"
-      puts '-------------'
-      is.save! if !args.dry_run
-    end
+    members.values.each { |m| m.project = projects[m.project_id] }
+    member_roles.values.select { |mr| mr.member}.group_by {|mr| mr.member }.each { |m, mrs| m.member_roles = mrs }
 
-    puts ''
-    puts "Importing Users not associated with projects"
-    users.values.select { |u| u.id.nil? && !current_users[u.login] }.each do |u|
-      puts "Importing User Status #{u.name} (login: #{u.login})"
-      puts '-------------'
-      u.save! if !args.dry_run
-    end
+    # Remove memberRole add new member roles callbacks
+    MemberRole.skip_callback(:create, :after, :add_role_to_group_users)
+    MemberRole.skip_callback(:create, :after, :add_role_to_subprojects)
+
+    logging_import(members.values, 'Members', Member, args.dry_run)
   end
 
   desc "Import Redmine Issue Data From Remote Instance. Usage: rake rit:issue_import -- [options]"
