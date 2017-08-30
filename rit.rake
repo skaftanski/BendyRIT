@@ -484,13 +484,13 @@ PROJECTS
     puts ''
     puts "Importing Attachmments"
     attachments.map do |attachment|
+      # binding.pry unless attachment.valid?
       attachment.save! if !args.dry_run
     end
 
     watchers.each { |w| w.user = user_id_map[w.user_id] }
     watchers.group_by(&:watchable_id).each do |issue_id, watched_issues|
       issue = issues[issue_id_map[issue_id]]
-      next if issue.nil?
       watched_issues.each { |wi| wi.watchable_id = issue.id }
     end
 
