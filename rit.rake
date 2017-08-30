@@ -362,12 +362,30 @@ PROJECTS
       new_issue.root_id = issue_id_map[i.root_id]
       new_issue.parent_id = issue_id_map[i.parent_id]
 
+      new_issue.created_on = i.created_on
+      new_issue.updated_on = i.updated_on
+
       acc[new_issue.id] = new_issue
       acc
     end
 
-    time_entries = TimeEntry.all.map(&:dup)
-    attachments = Attachment.all.map(&:dup)
+    time_entries = TimeEntry.all.map do |te|
+      new_time_entry = te.dup
+
+      new_time_entry.created_on = te.created_on
+      new_time_entry.updated_on = te.updated_on
+
+      new_time_entry
+    end
+
+    attachments = Attachment.all.map do |a|
+      new_attachment = a.dup
+
+      new_attachment.created_on = a.created_on
+
+      new_attachment
+    end
+
     issue_relations = IssueRelation.all.map(&:dup)
     watchers = Watcher.joins(:user).where(watchable_type: 'Issue', users: {status: User::STATUS_ACTIVE}).all.map(&:dup)
 
@@ -377,10 +395,13 @@ PROJECTS
       new_journal.details = j.details.map(&:dup)
       new_journal.details.each { |jd| jd.journal = new_journal }
 
+      new_journal.created_on = j.created_on
+
       new_journal
     end
 
     # Set connection back to local database
+    ActiveRecord::Base.record_timestamps = false
     ActiveRecord::Base.establish_connection(**current_configuration)
 
     # Set up relations
@@ -410,6 +431,7 @@ PROJECTS
 
     # Remove Unnecessary active record callbacks
     Issue.skip_callback(:save, :before, :close_duplicates)
+    Issue.skip_callback(:save, :before, :force_updated_on_change)
 
     Issue.skip_callback(:create, :after, :send_notification)
 
@@ -527,6 +549,8 @@ PROJECTS
         puts "#{journals_imported} of #{total_journals} #{(journals_imported * 100) / total_journals}%"
       end
     end
+
+    ActiveRecord::Base.record_timestamps = true
   end
 end
 
