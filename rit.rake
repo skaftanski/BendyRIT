@@ -589,6 +589,15 @@ PROJECTS
 
     logging_import(issue_relations, 'Issue Relations', IssueRelation, args.dry_run)
 
+    Project
+    class Project
+      alias_method :active_activities, :activities
+
+      def activities(include_inactive=false)
+        self.active_activities(true)
+      end
+    end
+
     time_entries.each do |time_entry|
       time_entry.project = project_id_map[time_entry.project_id]
       time_entry.user = user_id_map[time_entry.user_id]
