@@ -201,14 +201,6 @@ namespace :rit do
     end
 
     puts ''
-    puts "Importing Groups"
-    groups.values.reject(&:id).each do |g|
-      puts "Importing Group #{g.lastname}"
-      puts '-------------'
-      g.save! if !args.dry_run
-    end
-
-    puts ''
     puts "Importing Roles"
     roles.values.reject(&:id).each do |r|
       puts "Importing Role #{r.name}"
