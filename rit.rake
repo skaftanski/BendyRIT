@@ -508,7 +508,7 @@ PROJECTS
     end
 
     issue_relations = IssueRelation.all.map(&:dup)
-    watchers = Watcher.joins(:user).where(watchable_type: 'Issue', users: {status: User::STATUS_ACTIVE}).all.map(&:dup)
+    watchers = Watcher.eager_load(:user).where(watchable_type: 'Issue').all.map(&:dup)
 
     journals = Journal.eager_load(:details).all.map do |j|
       new_journal = j.dup
@@ -622,13 +622,15 @@ PROJECTS
     logging_import(attachments, 'Attachments', Attachment, args.dry_run)
 
     watchers.each { |w| w.user = user_id_map[w.user_id] }
-    watchers.group_by(&:watchable_id).each do |issue_id, watched_issues|
+    active_watchers = watchers.select { |w| w.user.active? }
+
+    active_watchers.group_by(&:watchable_id).each do |issue_id, watched_issues|
       issue = issues[issue_id_map[issue_id]]
       next if issue.nil?
       watched_issues.each { |wi| wi.watchable_id = issue.id }
     end
 
-    logging_import(watchers, 'Watchers', Watcher, args.dry_run)
+    logging_import(active_watchers, 'Watchers', Watcher, args.dry_run)
 
     journals.group_by(&:journalized_id).each do |issue_id, issue_journals|
       issue = issues[issue_id_map[issue_id]]
