@@ -419,6 +419,15 @@ PROJECTS
     end
 
     # Loading Current Issue relation tables
+    Project
+    class Project
+      alias_method :active_activities, :activities
+
+      def activities(include_inactive=false)
+        self.active_activities(true)
+      end
+    end
+
     current_groups = Group.all.inject({}) { |acc, cg| acc[cg.lastname] = cg; acc }
     current_users = User.all.inject({}) { |acc, cu| acc[cu.login] = cu; acc }
     current_trackers = Tracker.all.inject({}) { |acc, ct| acc[ct.name] = ct; acc }
@@ -588,15 +597,6 @@ PROJECTS
     end
 
     logging_import(issue_relations, 'Issue Relations', IssueRelation, args.dry_run)
-
-    Project
-    class Project
-      alias_method :active_activities, :activities
-
-      def activities(include_inactive=false)
-        self.active_activities(true)
-      end
-    end
 
     time_entries.each do |time_entry|
       time_entry.project = project_id_map[time_entry.project_id]
