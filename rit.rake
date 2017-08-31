@@ -469,7 +469,14 @@ PROJECTS
       records_imported = 0
       import_class.transaction do
         records.map do |record|
-          record.save! if !dry_run && record.new_record?
+          begin
+            record.save! if !dry_run && record.new_record?
+          rescue Excpetion => e
+            puts"'#{name} Import Error"
+            puts e.emssage
+            puts name
+            pp record
+          end
           records_imported = (records_imported + 1)
           if 0 == (records_imported % record_block_num)
             puts "#{records_imported} of #{total_records} #{(records_imported * 100) / total_records}%"
