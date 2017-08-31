@@ -260,7 +260,7 @@ namespace :rit do
 
     logging_import(workflow_rules, 'Workflow Rules', WorkflowRule, args.dry_run)
 
-    projects.values.select { |p| p.parent }.each { |p| p.parent = projects[p.parent_id] }
+    projects.values.select(&:parent_id).each { |p| p.parent = projects[p.parent_id]; p.parent_id = nil }
 
     issue_categories.each do |issue_category|
       issue_category.project = projects[issue_category.project_id]
