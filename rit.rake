@@ -197,7 +197,16 @@ namespace :rit do
     users.values.select { |u| u.id.nil? && !current_users[u.login] }.each do |u|
       puts "Importing User #{u.name} (login: #{u.login})"
       puts '-------------'
-      u.save! if !args.dry_run
+      begin
+        u.save! if !args.dry_run
+      rescue Exception => e
+        puts 'User Import Error'
+        puts e.emssage
+        puts 'User'
+        pp u
+
+        throw e
+      end
     end
 
     puts ''
@@ -205,7 +214,16 @@ namespace :rit do
     roles.values.reject(&:id).each do |r|
       puts "Importing Role #{r.name}"
       puts '-------------'
-      r.save! if !args.dry_run
+      begin
+        r.save! if !args.dry_run
+      rescue Exception => e
+        puts 'Role Import Error'
+        puts e.emssage
+        puts 'Role'
+        pp r
+
+        throw e
+      end
     end
 
     puts ''
@@ -213,7 +231,16 @@ namespace :rit do
     issue_statuses.values.each do |is|
       puts "Importing  #{is.name}"
       puts '-------------'
-      is.save! if !args.dry_run
+      begin
+        is.save! if !args.dry_run
+      rescue Exception => e
+        puts 'Issue Status Import Error'
+        puts e.emssage
+        puts 'Issue Status'
+        pp is
+
+        throw e
+      end
     end
 
     trackers.values.each { |t| t.default_status = issue_statuses[t.default_status_id] }
@@ -223,7 +250,16 @@ namespace :rit do
     trackers.values.each do |t|
       puts "Importing Tracker #{t.name}"
       puts '-------------'
-      t.save! if !args.dry_run
+      begin
+        t.save! if !args.dry_run
+      rescue Exception => e
+        puts 'Tracker Import Error'
+        puts e.emssage
+        puts 'Tracker'
+        pp t
+
+        throw e
+      end
     end
 
     workflow_rules.each do |workflow|
@@ -241,7 +277,16 @@ namespace :rit do
       records_imported = 0
       import_class.transaction do
         records.map do |record|
-          record.save! if !dry_run && record.new_record?
+          begin
+            record.save! if !dry_run && record.new_record?
+          rescue Exception => e
+            puts"'#{name} Import Error"
+            puts e.emssage
+            puts name
+            pp record
+
+            throw e
+          end
           records_imported = (records_imported + 1)
           if 0 == (records_imported % record_block_num)
             puts "#{records_imported} of #{total_records} #{(records_imported * 100) / total_records}%"
@@ -276,7 +321,44 @@ PROJECTS
     projects.values.each do |p|
       puts "Importing Project #{p.name} (identifier: #{p.identifier})"
       puts '-------------'
-      p.save! if (p.new_record? && !args.dry_run)
+      begin
+        p.save! if (p.new_record? && !args.dry_run)
+      rescue Exception => e
+        puts 'Project Import Error'
+
+        bad_versions
+        puts e.emssage
+        puts 'Project'
+        pp p
+
+        puts 'Project Versions'
+        puts '-------------'
+        bad_versions = p.versions.reject { |v| v.errors.messages.empty?}
+        puts 'Bad Project Verions' unless bad_versions.empty?
+        bad_versions.each do |bv|
+          pp bv.errors.full_messages
+          pp bv
+        end
+
+        puts 'Good Project Verions'
+        good_versions = p.versions.select { |v| v.errors.messages.empty?}
+        good_versions.each { |gv| pp gv}
+
+        puts 'Project Issue Categories'
+        puts '-------------'
+        bad_issue_categories = p.issue_categories.reject { |v| v.errors.messages.empty?}
+        puts 'Bad Project Issue Category' unless bad_issue_categories.empty?
+        bad_issue_categories.each do |bv|
+          pp bv.errors.full_messages
+          pp bv
+        end
+
+        puts 'Good Project Issue Category'
+        good_issue_categories = p.issue_categories.select { |v| v.errors.messages.empty?}
+        good_issue_categories.each { |gv| pp gv}
+
+        throw e
+      end
     end
 
     enumerations.values.select(&:parent_id).each { |e| e.parent = enumerations[e.parent_id]}
@@ -471,11 +553,13 @@ PROJECTS
         records.map do |record|
           begin
             record.save! if !dry_run && record.new_record?
-          rescue Excpetion => e
+          rescue Exception => e
             puts"'#{name} Import Error"
             puts e.emssage
             puts name
             pp record
+
+            throw e
           end
           records_imported = (records_imported + 1)
           if 0 == (records_imported % record_block_num)
