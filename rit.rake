@@ -539,6 +539,8 @@ PROJECTS
       issue.assigned_to = user_id_map[issue.assigned_to_id]
       issue.status = status
       issue.priority =  enumeration_id_map[issue.priority_id]
+
+      issue.instance_variable_set(:@assignable_versions, issue.project.shared_versions)
     end
 
     # Remove Unnecessary active record callbacks
