@@ -326,7 +326,6 @@ PROJECTS
       rescue Exception => e
         puts 'Project Import Error'
 
-        bad_versions
         puts e.emssage
         puts 'Project'
         pp p
