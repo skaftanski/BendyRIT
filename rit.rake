@@ -201,7 +201,7 @@ namespace :rit do
         u.save! if !args.dry_run
       rescue Exception => e
         puts 'User Import Error'
-        puts e.emssage
+        puts e.message
         puts 'User'
         pp u
 
@@ -218,7 +218,7 @@ namespace :rit do
         r.save! if !args.dry_run
       rescue Exception => e
         puts 'Role Import Error'
-        puts e.emssage
+        puts e.message
         puts 'Role'
         pp r
 
@@ -235,7 +235,7 @@ namespace :rit do
         is.save! if !args.dry_run
       rescue Exception => e
         puts 'Issue Status Import Error'
-        puts e.emssage
+        puts e.message
         puts 'Issue Status'
         pp is
 
@@ -254,7 +254,7 @@ namespace :rit do
         t.save! if !args.dry_run
       rescue Exception => e
         puts 'Tracker Import Error'
-        puts e.emssage
+        puts e.message
         puts 'Tracker'
         pp t
 
@@ -281,7 +281,7 @@ namespace :rit do
             record.save! if !dry_run && record.new_record?
           rescue Exception => e
             puts"'#{name} Import Error"
-            puts e.emssage
+            puts e.message
             puts name
             pp record
 
@@ -326,7 +326,7 @@ PROJECTS
       rescue Exception => e
         puts 'Project Import Error'
 
-        puts e.emssage
+        puts e.message
         puts 'Project'
         pp p
 
@@ -554,7 +554,7 @@ PROJECTS
             record.save! if !dry_run && record.new_record?
           rescue Exception => e
             puts"'#{name} Import Error"
-            puts e.emssage
+            puts e.message
             puts name
             pp record
 
