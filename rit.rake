@@ -622,7 +622,7 @@ PROJECTS
     logging_import(attachments, 'Attachments', Attachment, args.dry_run)
 
     watchers.each { |w| w.user = user_id_map[w.user_id] }
-    active_watchers = watchers.select { |w| w.user.active? }
+    active_watchers = watchers.select { |w| w.user&.active? }
 
     active_watchers.group_by(&:watchable_id).each do |issue_id, watched_issues|
       issue = issues[issue_id_map[issue_id]]
